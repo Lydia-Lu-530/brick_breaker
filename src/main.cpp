@@ -63,8 +63,8 @@ int main() {
             BeginDrawing();
                 ClearBackground(RAYWHITE);
                 // 胜利提示（居中显示）
-                DrawText("CONGRATULATIONS!", screenWidth/2 - 120, screenHeight/2 - 40, 40, GREEN);
-                DrawText("YOU WIN!", screenWidth/2 - 60, screenHeight/2 + 20, 40, GREEN);
+                DrawText("CONGRATULATIONS!", screenWidth/2 - 140, screenHeight/2 - 40, 40, GREEN);
+                DrawText("YOU WIN!", screenWidth/2 - 80, screenHeight/2 + 20, 40, GREEN);
                 // 胜利时显示最终分数
                 std::string finalScore = "Final Score: " + std::to_string(score);
                 DrawText(finalScore.c_str(), screenWidth/2 - 80, screenHeight/2 + 80, 20, GREEN);
