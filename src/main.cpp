@@ -113,17 +113,17 @@ int main() {
             // ===== 新增：绘制生命值 =====
             char lifeText[20];
             sprintf(lifeText, "Lives: %d", lives); // 拼接生命值文本
-            DrawText(lifeText, screenWidth - 100, 10, 20, RED); // 右上角显示
+            DrawText(lifeText, screenWidth - 120, 10, 20, RED); // 右上角显示
 
             // ===== 新增：游戏结束逻辑（可选）=====
             if (lives <= 0) {
-                DrawText("GAME OVER!", screenWidth/2 - 80, screenHeight/2, 40, RED);
+                DrawText("GAME OVER!", screenWidth/2 - 150, screenHeight/2, 40, RED);
                 // 结束后按ESC退出，或点击窗口关闭
             }
 
             // ===== 新增：分数显示（右上角，生命值下方）=====
             std::string scoreText = "Score: " + std::to_string(score);
-            DrawText(scoreText.c_str(), screenWidth - 100, 40, 20, GOLD);
+            DrawText(scoreText.c_str(), screenWidth - 120, 40, 20, ORANGE);
         EndDrawing();
     }
 
