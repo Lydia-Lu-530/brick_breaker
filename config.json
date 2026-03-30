@@ -1,0 +1,27 @@
+{
+  "window": {
+    "width": 800,
+    "height": 600
+  },
+  "ball": {
+    "radius": 10.0,
+    "speed_x": 4.0,
+    "speed_y": -4.0
+  },
+  "paddle": {
+    "width": 120.0,
+    "height": 20.0,
+    "speed": 6.0,
+    "offset_y": 50.0
+  },
+  "brick": {
+    "width": 60.0,
+    "height": 20.0,
+    "spacing": 10.0,
+    "count": 10
+  },
+  "game": {
+    "initial_lives": 3,
+    "score_gold": 5
+  }
+}
