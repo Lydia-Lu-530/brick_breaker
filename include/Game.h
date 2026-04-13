@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 #include <vector>
 #include <string>
+#include "PowerUp.h" 
 
 // 游戏状态枚举
 enum class GameState {
@@ -62,6 +63,8 @@ private:
     int m_lives;
     int m_score;
     GameState m_currentState; // 核心状态机变量
+
+    std::vector<PowerUp> m_powerUps;
 };
 
 #endif // GAME_H

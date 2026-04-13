@@ -27,3 +27,12 @@ Rectangle Paddle::GetRect() const {
         height
     };
 }
+
+void Paddle::SetWidth(float newWidth) {
+    width = newWidth;
+    // 同步更新碰撞矩形
+    rect.x = pos.x - width / 2.0f;
+    rect.y = pos.y - height / 2.0f;
+    rect.width = width;
+    rect.height = height;
+}

@@ -9,6 +9,7 @@ struct Paddle {
     float width;     // 宽度
     float height;    // 高度
     float speed;     // 移动速度
+    Rectangle rect; // 碰撞矩形
 
     // 构造函数
     Paddle(float x, float y, float width, float height, float speed);
@@ -18,6 +19,8 @@ struct Paddle {
 
     // 获取挡板的碰撞矩形
     Rectangle GetRect() const;
+
+    void SetWidth(float width);
 };
 
 #endif // PADDLE_H

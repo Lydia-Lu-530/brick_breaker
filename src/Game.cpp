@@ -74,6 +74,7 @@ void Game::Init() {
         paddleHeight,
         paddleSpeed
     );
+    
 
     // 初始化砖块（请替换为你自己的 CreateBricks 实现）
     m_bricks = CreateBricks(m_screenWidth);
@@ -162,6 +163,37 @@ void Game::Update() {
 
     // 球与砖块碰撞（加分）
     CheckBallBrickCollision(*m_ball, m_bricks, m_score);
+
+    // ====================== 道具生成（极简、必出、不破坏代码） ======================
+static std::vector<bool> spawned(m_bricks.size(), false);
+
+for (int i = 0; i < m_bricks.size(); i++) {
+    if (!m_bricks[i].alive && !spawned[i]) {
+        spawned[i] = true;
+        Vector2 pos = {
+            m_bricks[i].rect.x + m_bricks[i].rect.width / 2,
+            m_bricks[i].rect.y
+        };
+        m_powerUps.emplace_back(pos);
+    }
+}
+
+// 更新道具
+for (auto it = m_powerUps.begin(); it != m_powerUps.end();) {
+    it->Update(GetFrameTime());
+    bool caught = it->CheckPaddleCollision(m_paddle->GetRect());
+
+    if (caught) {
+        m_paddle->SetWidth(180.0f);
+        it = m_powerUps.erase(it);
+    }
+    else if (!it->active) {
+        it = m_powerUps.erase(it);
+    }
+    else {
+        ++it;
+    }
+}
 }
 
 // 绘制所有元素（按状态分支）
@@ -195,6 +227,7 @@ void Game::Draw() {
             for (const auto& brick : m_bricks) {
                 if (brick.alive) DrawRectangleRec(brick.rect, brick.color);
             }
+            for (auto& p : m_powerUps) p.Draw();
             // 绘制UI
             DrawText("Press P to Pause", 10, 10, 20, GRAY);
             DrawText(TextFormat("Lives: %d", m_lives), m_screenWidth - 100, 10, 20, RED);
@@ -267,6 +300,8 @@ void Game::Reset() {
             GOLD, scoreGold
         );
     }
+    m_powerUps.clear();
 
     m_ball->Reset(m_screenWidth, m_screenHeight);
+
 }
