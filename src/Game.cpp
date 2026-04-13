@@ -197,8 +197,8 @@ void Game::Draw() {
             }
             // 绘制UI
             DrawText("Press P to Pause", 10, 10, 20, GRAY);
-            DrawText(TextFormat("Lives: %d", m_lives), m_screenWidth - 100, 10, 20, RED);
-            DrawText(TextFormat("Score: %d", m_score), m_screenWidth - 100, 40, 20, GOLD);
+            DrawText(TextFormat("Lives: %d", m_lives), m_screenWidth - 150, 10, 20, RED);
+            DrawText(TextFormat("Score: %d", m_score), m_screenWidth - 150, 40, 20, ORANGE);
             break;
 
         case GameState::PAUSED:{
@@ -259,14 +259,7 @@ void Game::Reset() {
     int scoreGold = config["game"]["score_gold"];
 
     // 重新初始化砖块（和 Init() 保持一致）
-    for (int i = 0; i < brickCount; ++i) {
-        m_bricks.emplace_back(
-            60.0f + i * (brickW + brickSpace),
-            60.0f,
-            brickW, brickH,
-            GOLD, scoreGold
-        );
-    }
+    m_bricks = CreateBricks(m_screenWidth);
 
     m_ball->Reset(m_screenWidth, m_screenHeight);
 }
