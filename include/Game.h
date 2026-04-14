@@ -8,63 +8,78 @@
 #include <nlohmann/json.hpp>
 #include <vector>
 #include <string>
-#include "PowerUp.h" 
+#include "PowerUp.h"
+#include <random>
+#include <memory>
 
-// 游戏状态枚举
+// 粒子结构体（砖块破碎特效）
+struct Particle {
+    Vector2 pos;
+    Vector2 vel;
+    Color color;
+    float life;
+    float maxLife;
+};
+
 enum class GameState {
-    MENU,        // 菜单
-    PLAYING,     // 游戏中
-    PAUSED,      // 暂停
-    GAMEOVER,    // 失败
-    VICTORY,     // 胜利
-    LEADERBOARD  // 排行榜
+    MENU,
+    PLAYING,
+    PAUSED,
+    GAMEOVER,
+    VICTORY,
+    LEADERBOARD
 };
 
 class Game {
 public:
-    // 构造函数：初始化窗口、游戏对象
     Game(int screenWidth, int screenHeight, const char* title);
-    // 析构函数：释放资源
     ~Game();
-
-    // 游戏主循环
     void Run();
 
+    // 道具效果接口
+    void ExtendPaddle(float scale, float duration);
+    void SpawnMultiBall();
+    void SlowBall(float scale, float duration);
+    void ResetPaddleSize();
+    void ResetBallSpeed();
+    Rectangle GetPaddleRect();
+    int GetScreenHeight();
+
 private:
-    // 加载配置文件
     void LoadConfig();
-    // 初始化所有游戏对象
     void Init();
-    // 处理状态转换
     void HandleStateTransition();
-    // 更新游戏逻辑（按状态分支）
     void Update();
-    // 绘制所有元素（按状态分支）
     void Draw();
-    // 检查所有砖块是否被击碎
     bool CheckAllBricksDestroyed();
-    // 重置游戏
     void Reset();
+    void SpawnBrickParticles(Vector2 pos, Color color); // 粒子生成函数声明
 
-    // 配置（只保留一次）
     nlohmann::json config;
+    nlohmann::json powerUpConfig; // 道具JSON配置
 
-    // 窗口参数
     int m_screenWidth;
     int m_screenHeight;
     const char* m_title;
 
-    // 游戏对象
     Ball* m_ball;
     Paddle* m_paddle;
     std::vector<Brick> m_bricks;
+    std::vector<std::unique_ptr<PowerUp>> m_powerUps;
+    std::vector<Ball> m_extraBalls;  // 额外球容器
+    std::vector<Particle> m_particles; // 粒子容器
 
-    // 游戏状态与数据
     int m_lives;
     int m_score;
-    GameState m_currentState; // 核心状态机变量
+    GameState m_currentState;
 
-    std::vector<PowerUp> m_powerUps;
+    std::mt19937 m_rng; // 随机数生成器
+
+    // 道具状态变量
+    float m_paddleOriginalWidth;
+    float m_ballOriginalSpeedX, m_ballOriginalSpeedY;
+    float m_paddleExtendTimer;
+    float m_ballSlowTimer;
 };
 
-#endif // GAME_H
+#endif

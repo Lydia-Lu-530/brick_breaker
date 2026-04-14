@@ -24,7 +24,7 @@ TEST_TARGET = $(BIN_DIR)/collision_test
 GTEST_LIBS = -lgtest -lgtest_main -lpthread
 
 # 默认目标：编译+运行游戏（原有逻辑不变）
-all: $(TARGET) run
+all: $(TARGET)
 
 # 创建目录
 $(OBJ_DIR) $(BIN_DIR) $(TEST_DIR):
@@ -34,11 +34,11 @@ $(OBJ_DIR) $(BIN_DIR) $(TEST_DIR):
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# 链接生成游戏可执行文件（原有逻辑不变）
+# 链接生成游戏可执行文件
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CC) $(OBJS) -o $@ $(LDFLAGS)
 
-# 运行游戏（原有逻辑不变）
+# 运行游戏
 run: $(TARGET)
 	./$(TARGET)
 
@@ -47,7 +47,7 @@ run: $(TARGET)
 $(TEST_OBJ): $(TEST_SRC) | $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# 链接生成测试可执行文件（链接 Ball.o + Brick.o + raylib）
+# 链接生成测试可执行文件
 $(TEST_TARGET): $(OBJ_DIR)/Ball.o $(OBJ_DIR)/Brick.o $(TEST_OBJ) | $(BIN_DIR)
 	$(CC) $(OBJ_DIR)/Ball.o $(OBJ_DIR)/Brick.o $(TEST_OBJ) -o $@ $(GTEST_LIBS) $(LDFLAGS)
 
@@ -55,7 +55,7 @@ $(TEST_TARGET): $(OBJ_DIR)/Ball.o $(OBJ_DIR)/Brick.o $(TEST_OBJ) | $(BIN_DIR)
 test: $(TEST_TARGET)
 	./$(TEST_TARGET)
 
-# 清理编译产物（包含测试文件）
+# 清理编译产物
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 

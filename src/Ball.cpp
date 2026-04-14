@@ -5,6 +5,7 @@ Ball::Ball(float x, float y, float radius, float vx, float vy) {
     this->pos = {x, y};
     this->radius = radius;
     this->vel = {vx, vy};
+    alive = true; 
 }
 
 // 更新球的位置
@@ -23,10 +24,14 @@ void Ball::CheckBoundaryCollision(int screenWidth, int screenHeight) {
     if (pos.y - radius <= 0) {
         vel.y *= -1;
     }
+    if (pos.y + radius > screenHeight) {
+        alive = false;
+    }
 }
 
 // 重置球的位置和速度
 void Ball::Reset(int screenWidth, int screenHeight) {
     pos = { (float)screenWidth/2, (float)screenHeight/2 };
     vel = {4.0f, -4.0f};
+    alive = true;
 }
