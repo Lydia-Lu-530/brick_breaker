@@ -11,10 +11,10 @@ Paddle::Paddle(float x, float y, float width, float height, float speed) {
 }
 
 // 更新挡板位置（键盘控制）
-void Paddle::Update(int screenWidth) {
-    if (IsKeyDown(KEY_LEFT)) pos.x -= speed;
-    if (IsKeyDown(KEY_RIGHT)) pos.x += speed;
-    // 限制挡板在屏幕内
+void Paddle::Update(int screenWidth, float deltaTime) {
+    if (IsKeyDown(KEY_LEFT)) pos.x -= speed * deltaTime;
+    if (IsKeyDown(KEY_RIGHT)) pos.x += speed * deltaTime;
+
     pos.x = Clamp(pos.x, width/2, (float)screenWidth - width/2);
 }
 

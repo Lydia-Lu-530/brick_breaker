@@ -137,13 +137,14 @@ void Game::HandleStateTransition() {
 
 // 更新游戏逻辑（仅 PLAYING 状态执行）
 void Game::Update() {
+    float dt = GetFrameTime();
     if (m_currentState != GameState::PLAYING) {
         return;
     }
 
     // 更新小球和挡板
     m_ball->Update();
-    m_paddle->Update(m_screenWidth);
+    m_paddle->Update(m_screenWidth,dt);
     m_ball->CheckBoundaryCollision(m_screenWidth, m_screenHeight);
 
     // 小球掉落扣命

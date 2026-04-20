@@ -14,7 +14,8 @@ struct Paddle {
     Paddle(float x, float y, float width, float height, float speed);
 
     // 更新挡板位置（键盘控制）
-    void Update(int screenWidth);
+    // Paddle.h
+    void Update(int screenWidth, float deltaTime);
 
     // 获取挡板的碰撞矩形
     Rectangle GetRect() const;

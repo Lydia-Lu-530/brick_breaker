@@ -11,7 +11,7 @@
   "paddle": {
     "width": 120.0,
     "height": 20.0,
-    "speed": 6.0,
+    "speed": 200.0,
     "offset_y": 50.0
   },
   "brick": {
