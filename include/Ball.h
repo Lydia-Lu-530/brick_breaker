@@ -8,6 +8,7 @@ struct Ball {
     Vector2 pos;    // 位置
     Vector2 vel;    // 速度
     float radius;   // 半径
+    bool alive;
 
     // 构造函数
     Ball(float x, float y, float radius, float vx, float vy);
@@ -20,6 +21,11 @@ struct Ball {
 
     // 重置球的位置和速度
     void Reset(int screenWidth, int screenHeight);
+
+    Vector2 GetPosition() const { return pos; }
+    float GetRadius() const { return radius; }
+    bool IsAlive() const { return alive; }
+    void SetAlive(bool a) { alive = a; }
 };
 
 #endif // BALL_H

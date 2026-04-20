@@ -1,0 +1,23 @@
+{
+    "drop_chance": 0.2,
+    "power_ups": [
+        {
+            "type": "PADDLE_EXTEND",
+            "scale": 1.5,
+            "duration": 5.0,
+            "color": "BLUE"
+        },
+        {
+            "type": "MULTI_BALL",
+            "count": 1,
+            "duration": 0.0,
+            "color": "GREEN"
+        },
+        {
+            "type": "SLOW_BALL",
+            "scale": 0.7,
+            "duration": 5.0,
+            "color": "YELLOW"
+        }
+    ]
+}
