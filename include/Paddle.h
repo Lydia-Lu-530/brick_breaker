@@ -19,6 +19,8 @@ struct Paddle {
 
     // 获取挡板的碰撞矩形
     Rectangle GetRect() const;
+
+    void SetWidth(float newWidth); // 确认参数是 float 类型
 };
 
 #endif // PADDLE_H
