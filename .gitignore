@@ -1,5 +1,16 @@
+# 编译产物
 bin/
 obj/
 *.o
 *.exe
+*.out
+
+# 编辑器文件
 .vscode/
+.idea/
+*.swp
+*.swo
+
+# 无关文件
+*.log
+*.docx
