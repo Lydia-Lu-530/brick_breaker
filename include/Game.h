@@ -11,6 +11,10 @@
 #include "PowerUp.h"
 #include <random>
 #include <memory>
+#include <mutex>
+#include <future>
+#include <chrono>
+#include <thread>
 
 // 粒子结构体（砖块破碎特效）
 struct Particle {
@@ -80,6 +84,14 @@ private:
     float m_ballOriginalSpeedX, m_ballOriginalSpeedY;
     float m_paddleExtendTimer;
     float m_ballSlowTimer;
+
+     // 异步加载相关
+    std::mutex m_loadingMutex;          // 互斥锁保护共享状态
+    std::future<void> m_loadingFuture;  // 后台加载任务句柄
+    bool m_isLoading = false;           // 加载状态标志
+    bool m_loadingComplete = false;     // 加载完成标志
+    Color m_originalBrickColor = RED;   // 砖块原始颜色
+    void SimulateAsyncLoad();
 };
 
 #endif

@@ -54,6 +54,17 @@ Game::~Game() {
     CloseWindow();
 }
 
+// 后台线程：模拟加载大型纹理
+void Game::SimulateAsyncLoad() {
+    // 模拟加载耗时（3秒）
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+    // 加载完成，更新状态（加锁保护）
+    std::lock_guard<std::mutex> lock(m_loadingMutex);
+    m_isLoading = false;
+    m_loadingComplete = true;
+}
+
 void Game::Init() {
     float ballRadius = config["ball"]["radius"];
     float ballSpeedX = config["ball"]["speed_x"];
@@ -152,6 +163,27 @@ void Game::Update() {
     if (m_currentState != GameState::PLAYING) return;
 
     float dt = GetFrameTime();
+
+        // 按下 L 键触发异步加载（仅游戏运行中可触发）
+    if (m_currentState == GameState::PLAYING && IsKeyPressed(KEY_L)) {
+        std::lock_guard<std::mutex> lock(m_loadingMutex);
+        if (!m_isLoading && !m_loadingComplete) {
+            m_isLoading = true;
+            // 启动后台加载线程
+            m_loadingFuture = std::async(std::launch::async, &Game::SimulateAsyncLoad, this);
+        }
+    }
+
+    // 主线程检查加载完成状态
+    {
+        std::lock_guard<std::mutex> lock(m_loadingMutex);
+        if (m_loadingComplete) {
+            // 加载完成，改变所有砖块颜色为绿色
+            for (auto& brick : m_bricks) {
+                brick.color = GREEN;
+            }
+        }
+    }
 
     // 更新小球和挡板
     m_ball->Update();
@@ -331,6 +363,17 @@ void Game::Draw() {
                 pu->Draw();
             }
 
+            // 绘制加载提示（加锁读取状态）
+    {
+        std::lock_guard<std::mutex> lock(m_loadingMutex);
+        if (m_isLoading) {
+            const char* loadingText = "Loading...";
+            int textWidth = MeasureText(loadingText, 40);
+            DrawText(loadingText, m_screenWidth/2 - textWidth/2, m_screenHeight/2, 40, ORANGE);
+        }
+    }
+
+
             // UI
             DrawText("Press P to Pause",10,10,20,GRAY);
             DrawText(TextFormat("Lives: %d",m_lives),m_screenWidth-100,10,20,RED);
@@ -391,6 +434,7 @@ void Game::Reset() {
     m_particles.clear();
     m_paddleExtendTimer = 0;
     m_ballSlowTimer = 0;
+    LoadConfig();  // 重新读取配置 + 生成砖块
 
     float bw = config["brick"]["width"];
     float bh = config["brick"]["height"];
@@ -405,6 +449,9 @@ void Game::Reset() {
     m_ball->Reset(m_screenWidth,m_screenHeight);
     ResetPaddleSize();
     ResetBallSpeed();
+     // 重置异步加载状态
+    m_loadingComplete = false;
+    m_isLoading = false;
 }
 
 // 道具效果实现
