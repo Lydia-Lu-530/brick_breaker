@@ -44,6 +44,8 @@ public:
     void ResetBallSpeed();
     Rectangle GetPaddleRect();
     int GetScreenHeight();
+    // 网格初始化
+    void InitBrickGrid();
 
 private:
     void LoadConfig();
@@ -80,6 +82,11 @@ private:
     float m_ballOriginalSpeedX, m_ballOriginalSpeedY;
     float m_paddleExtendTimer;
     float m_ballSlowTimer;
+
+    // 碰撞检测网格参数
+    static const int GRID_COLS = 10;
+    static const int GRID_ROWS = 6;
+    std::vector<Brick*> m_brickGrid[GRID_COLS][GRID_ROWS];
 };
 
 #endif

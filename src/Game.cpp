@@ -92,6 +92,8 @@ void Game::Init() {
     m_powerUps.clear();
     m_extraBalls.clear();
     m_particles.clear();
+
+    InitBrickGrid();
 }
 
 void Game::Run() {
@@ -173,7 +175,8 @@ void Game::Update() {
         m_ball->vel.x = (m_ball->pos.x - m_paddle->pos.x) * 0.1f;
     }
 
-    // 球与砖块碰撞（加分 + 粒子特效）
+    // 球与砖块碰撞（加分 + 粒子特效）初版
+    /*
     for (auto& brick : m_bricks) {
         if (!brick.alive) continue;
         if (CheckCollisionCircleRec(m_ball->pos, m_ball->radius, brick.rect)) {
@@ -185,6 +188,36 @@ void Game::Update() {
             SpawnBrickParticles({brick.rect.x + brick.rect.width/2, brick.rect.y + brick.rect.height/2}, brick.color);
         }
     }
+    */
+    // ======================
+// 优化版：网格碰撞检测
+// ======================
+int ballCol = m_ball->pos.x / (m_screenWidth / GRID_COLS);
+int ballRow = m_ball->pos.y / (m_screenHeight / GRID_ROWS);
+ballCol = std::clamp(ballCol, 0, GRID_COLS - 1);
+ballRow = std::clamp(ballRow, 0, GRID_ROWS - 1);
+
+bool hitBrick = false;
+for (int dc = -1; dc <= 1; ++dc) {
+    for (int dr = -1; dr <= 1; ++dr) {
+        int c = ballCol + dc;
+        int r = ballRow + dr;
+        if (c < 0 || c >= GRID_COLS || r < 0 || r >= GRID_ROWS) continue;
+
+        for (Brick* brick : m_brickGrid[c][r]) {
+            if (!brick->alive) continue;
+            if (CheckCollisionCircleRec(m_ball->pos, m_ball->radius, brick->rect)) {
+                m_ball->vel.y *= -1;
+                brick->alive = false;
+                m_score += brick->score;
+                SpawnBrickParticles({ brick->rect.x + brick->rect.width / 2, brick->rect.y + brick->rect.height / 2 }, brick->color);
+                hitBrick = true;
+                break;
+            }
+        }
+        if (hitBrick) break;
+    }
+}
 
     // ====================== 随机道具生成（从JSON读取概率） ======================
     static std::vector<bool> spawned(m_bricks.size(), false);
@@ -230,6 +263,7 @@ void Game::Update() {
     }
 
     // ====================== 更新额外球 ======================
+    /*
     for (auto& ball : m_extraBalls) {
         ball.Update();
         ball.CheckBoundaryCollision(m_screenWidth, m_screenHeight);
@@ -249,16 +283,65 @@ void Game::Update() {
         }
         if (ball.pos.y + ball.radius >= m_screenHeight) ball.alive = false;
     }
+    */
+// 额外球优化碰撞
+for (auto& ball : m_extraBalls) {
+    if (!ball.alive) continue;
 
-    // 移除死亡的额外球
-    m_extraBalls.erase(
-        std::remove_if(m_extraBalls.begin(), m_extraBalls.end(),
-            [](const Ball& ball) {
-                return !ball.alive;
+    // ====================== 【必须加！让球移动】 ======================
+    ball.Update();
+    ball.CheckBoundaryCollision(m_screenWidth, m_screenHeight);
+    // ================================================================
+
+    // ========== 补上：额外球 碰挡板反弹 ==========
+    if (CheckCollisionCircleRec(ball.pos, ball.radius, m_paddle->GetRect()))
+    {
+        ball.vel.y *= -1;
+        ball.vel.x = (ball.pos.x - m_paddle->pos.x) * 0.1f;
+    }
+
+    int bCol = ball.pos.x / (m_screenWidth / GRID_COLS);
+    int bRow = ball.pos.y / (m_screenHeight / GRID_ROWS);
+    bCol = std::clamp(bCol, 0, GRID_COLS - 1);
+    bRow = std::clamp(bRow, 0, GRID_ROWS - 1);
+
+    bool hit = false;
+    for (int dc = -1; dc <= 1; ++dc) {
+        for (int dr = -1; dr <= 1; ++dr) {
+            int c = bCol + dc;
+            int r = bRow + dr;
+            if (c < 0 || c >= GRID_COLS || r < 0 || r >= GRID_ROWS) continue;
+
+            for (Brick* brick : m_brickGrid[c][r]) {
+                if (!brick->alive) continue;
+                if (CheckCollisionCircleRec(ball.pos, ball.radius, brick->rect)) {
+                    ball.vel.y *= -1;
+                    brick->alive = false;
+                    m_score += brick->score;
+                    SpawnBrickParticles({ brick->rect.x + brick->rect.width / 2, brick->rect.y + brick->rect.height / 2 }, brick->color);
+                    hit = true;
+                    break;
+                }
             }
-        ),
-        m_extraBalls.end()
-    );
+            if (hit) break;
+        }
+    }
+
+    // 额外球出界 → 死亡
+    if (ball.pos.y + ball.radius >= m_screenHeight || ball.pos.y - ball.radius <= 0) {
+        ball.alive = false;
+    }
+}
+
+// 移除死亡的额外球
+m_extraBalls.erase(
+    std::remove_if(m_extraBalls.begin(), m_extraBalls.end(),
+        [](const Ball& ball) {
+            return !ball.alive;
+        }
+    ),
+    m_extraBalls.end()
+);
 
     // ====================== 更新粒子 ======================
     for (auto it = m_particles.begin(); it != m_particles.end();) {
@@ -296,6 +379,9 @@ void Game::Update() {
 void Game::Draw() {
     BeginDrawing();
     ClearBackground(RAYWHITE);
+    
+    //检测帧率
+    DrawText(TextFormat("FPS: %.1f", 1.0f / GetFrameTime()), 10, 30, 20, BLUE);
 
     switch (m_currentState) {
         case GameState::MENU: {
@@ -405,6 +491,8 @@ void Game::Reset() {
     m_ball->Reset(m_screenWidth,m_screenHeight);
     ResetPaddleSize();
     ResetBallSpeed();
+
+    InitBrickGrid(); 
 }
 
 // 道具效果实现
@@ -450,4 +538,22 @@ Rectangle Game::GetPaddleRect() {
 
 int Game::GetScreenHeight() {
     return m_screenHeight;
+}
+
+void Game::InitBrickGrid() {
+    // 清空网格
+    for (int c = 0; c < Game::GRID_COLS; c++)
+        for (int r = 0; r < Game::GRID_ROWS; r++)
+            m_brickGrid[c][r].clear();
+
+    // 把砖块按位置放进对应网格
+    for (auto& brick : m_bricks) {
+        int col = brick.rect.x / (m_screenWidth / GRID_COLS);
+        int row = brick.rect.y / (m_screenHeight / GRID_ROWS);
+
+        col = std::clamp(col, 0, GRID_COLS - 1);
+        row = std::clamp(row, 0, GRID_ROWS - 1);
+
+        m_brickGrid[col][row].push_back(&brick);
+    }
 }
