@@ -87,6 +87,21 @@ private:
     static const int GRID_COLS = 10;
     static const int GRID_ROWS = 6;
     std::vector<Brick*> m_brickGrid[GRID_COLS][GRID_ROWS];
+
+    // ==========================
+    // 粒子对象池（性能优化）
+    // ==========================
+    struct PoolParticle {
+        Vector2 pos;
+        Vector2 vel;
+        Color color;
+        float life;
+        float maxLife;
+        bool active;
+    };
+
+    static const int MAX_PARTICLES = 300;  // 最多同时300个粒子
+    PoolParticle m_particlePool[MAX_PARTICLES]; // 对象池（预分配）
 };
 
 #endif

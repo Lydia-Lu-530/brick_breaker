@@ -93,6 +93,12 @@ void Game::Init() {
     m_extraBalls.clear();
     m_particles.clear();
 
+    // 初始化粒子对象池（全部设为未激活）
+    for (int i = 0; i < MAX_PARTICLES; i++) {
+        m_particlePool[i].active = false;
+        m_particlePool[i].life = 0;
+    }
+
     InitBrickGrid();
 }
 
@@ -132,7 +138,7 @@ void Game::HandleStateTransition() {
 }
 
 // 生成砖块破碎粒子
-void Game::SpawnBrickParticles(Vector2 pos, Color color) {
+/*void Game::SpawnBrickParticles(Vector2 pos, Color color) {
     std::uniform_real_distribution<float> angleDist(0, 2 * PI);
     std::uniform_real_distribution<float> speedDist(50, 150);
     std::uniform_real_distribution<float> lifeDist(0.5f, 1.0f);
@@ -147,6 +153,28 @@ void Game::SpawnBrickParticles(Vector2 pos, Color color) {
         p.life = lifeDist(m_rng);
         p.maxLife = p.life;
         m_particles.push_back(p);
+    }
+}*/
+//对象池版SpawnBrickParticles 
+void Game::SpawnBrickParticles(Vector2 pos, Color color)
+{
+    // 从对象池找空闲粒子，而不是新建
+    for (int i = 0; i < 6; i++) {  // 一次生成6个
+        for (int p = 0; p < MAX_PARTICLES; p++) {
+            if (!m_particlePool[p].active) {
+                // 拿到一个空闲粒子
+                m_particlePool[p].pos = pos;
+                m_particlePool[p].vel = {
+                    (float)(rand() % 100 - 50) * 0.02f,
+                    (float)(rand() % 100 - 50) * 0.02f
+                };
+                m_particlePool[p].color = color;
+                m_particlePool[p].life = 1.0f;
+                m_particlePool[p].maxLife = 1.0f;
+                m_particlePool[p].active = true;
+                break;
+            }
+        }
     }
 }
 
@@ -342,7 +370,7 @@ m_extraBalls.erase(
     ),
     m_extraBalls.end()
 );
-
+/*
     // ====================== 更新粒子 ======================
     for (auto it = m_particles.begin(); it != m_particles.end();) {
         it->pos.x += it->vel.x * dt;
@@ -355,6 +383,24 @@ m_extraBalls.erase(
             ++it;
         }
     }
+*/  
+    // ====================== 【对象池优化版】更新粒子 ======================
+for (int i = 0; i < MAX_PARTICLES; i++) {
+    if (!m_particlePool[i].active) continue;
+
+    // 保持你原来的物理效果：速度 + 重力
+    m_particlePool[i].pos.x += m_particlePool[i].vel.x * dt;
+    m_particlePool[i].pos.y += m_particlePool[i].vel.y * dt;
+    m_particlePool[i].vel.y += 200 * dt; // 重力完全保留！
+
+    // 生命周期递减
+    m_particlePool[i].life -= dt;
+
+    // 生命周期结束 -> 不删除，只是回收
+    if (m_particlePool[i].life <= 0) {
+        m_particlePool[i].active = false;
+    }
+}
 
     // ====================== 多球生命值处理 ======================
     bool allBallsDropped = (m_ball->GetPosition().y + m_ball->GetRadius() >= m_screenHeight);
@@ -397,10 +443,22 @@ void Game::Draw() {
             break;
         }
         case GameState::PLAYING: {
-            // 绘制粒子
+            /*// 绘制粒子
             for (auto& p : m_particles) {
                 float alpha = p.life / p.maxLife;
                 DrawCircleV(p.pos, 3, ColorAlpha(p.color, alpha));
+            }
+
+            DrawCircleV(m_ball->pos, m_ball->radius, RED);
+            DrawRectangleRec(m_paddle->GetRect(), BLUE);
+            for (auto& b : m_bricks) if (b.alive) DrawRectangleRec(b.rect, b.color);*/
+
+            // 绘制粒子（对象池优化版，和你原来效果完全一样）
+            for (int i = 0; i < MAX_PARTICLES; i++) {
+                if (!m_particlePool[i].active) continue;
+
+                float alpha = m_particlePool[i].life / m_particlePool[i].maxLife;
+             DrawCircleV(m_particlePool[i].pos, 3, ColorAlpha(m_particlePool[i].color, alpha));
             }
 
             DrawCircleV(m_ball->pos, m_ball->radius, RED);
