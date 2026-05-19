@@ -41,7 +41,13 @@ Game::Game(int screenWidth, int screenHeight, const char* title)
     , m_rng(std::random_device{}())
     , m_paddleExtendTimer(0.0f)
     , m_ballSlowTimer(0.0f)
+    , m_menuOption(0)      // 初始化菜单选项
+    , m_selectedLevel(1)   // 初始化关卡选择
 {
+    m_score = 0;
+    m_lives = 3;
+    m_currentLevel = 1;
+    m_hasSave = false;
     LoadConfig();
     InitWindow(m_screenWidth, m_screenHeight, m_title);
     SetTargetFPS(60);
@@ -69,6 +75,23 @@ void Game::Init() {
     m_paddleOriginalWidth = paddleWidth;
     m_ballOriginalSpeedX = ballSpeedX;
     m_ballOriginalSpeedY = ballSpeedY;
+
+    // 1. 先尝试读档
+    bool loadSuccess = LoadSaveGame();
+    if (loadSuccess) {
+        // 直接加载存档，不弹窗
+        TraceLog(LOG_INFO, "检测到存档，自动继续上次游戏：关卡%d，分数%d，生命%d",
+                 m_currentLevel, m_score, m_lives);
+        LoadLevelFromJSON(m_levelFiles[m_currentLevel - 1]);
+        // 删掉旧存档，防止每次启动都自动加载
+        std::remove("savegame.json");
+    } else {
+        // 无存档，直接开始第一关
+        m_score = 0;
+        m_lives = 3;
+        m_currentLevel = 1;
+        LoadLevelFromJSON(m_levelFiles[0]);
+    }
 
     m_ball = new Ball(
         m_screenWidth / 2.0f,
@@ -110,10 +133,168 @@ void Game::Run() {
     }
 }
 
+bool Game::LoadLevelFromJSON(const std::string& filename) {
+    m_bricks.clear();
+
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        TraceLog(LOG_WARNING, "无法打开关卡文件：%s，使用默认布局", filename.c_str());
+        // 默认布局（10列×5行，保留原红橙金规则）
+        for (int y = 0; y < 5; y++) {
+            for (int x = 0; x < 10; x++) {
+                Color color = RED;
+                int score = 10;
+                if (y == 0) { color = GOLD; score = 50; }    // 第1行金色50分
+                else if (y == 1) { color = ORANGE; score = 20; } // 第2行橙色20分
+                m_bricks.push_back(Brick(
+                    (float)x * 60,
+                    (float)y * 20,
+                    60, 20,
+                    color, score
+                ));
+            }
+        }
+        InitBrickGrid();
+        return false;
+    }
+
+    try {
+        json j;
+        file >> j;
+
+        int width = j["width"];
+        int height = j["height"];
+        float brickW = j["brickWidth"];
+        float brickH = j["brickHeight"];
+        auto layout = j["layout"];
+
+        // 计算起始X坐标（居中）
+        float startX = (m_screenWidth - (width * brickW)) / 2;
+        float startY = 50; // 顶部间距
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                if (layout[y][x] == 1) {
+                    // 根据行数定义颜色和分数
+                    Color brickColor = RED;
+                    int brickScore = 10;
+                    if (y == 0) { // 第1行：金色50分
+                        brickColor = GOLD;
+                        brickScore = 50;
+                    } else if (y == 1 || y == 5 || y == 7) { // 第2/6/7行：橙色20分（适配level2/3）
+                        brickColor = ORANGE;
+                        brickScore = 20;
+                    } // 其余行：红色10分（默认）
+
+                    m_bricks.push_back(Brick(
+                        startX + (float)x * brickW,
+                        startY + (float)y * brickH,
+                        brickW, brickH,
+                        brickColor, brickScore
+                    ));
+                }
+            }
+        }
+        InitBrickGrid();
+        return true;
+    } catch (const std::exception& e) {
+        TraceLog(LOG_ERROR, "JSON解析错误：%s，使用默认布局", e.what());
+        // 解析失败时用默认红橙金布局
+        for (int y = 0; y < 5; y++) {
+            for (int x = 0; x < 10; x++) {
+                Color color = RED;
+                int score = 10;
+                if (y == 0) { color = GOLD; score = 50; }
+                else if (y == 1) { color = ORANGE; score = 20; }
+                m_bricks.push_back(Brick(
+                    (float)x * 60,
+                    (float)y * 20,
+                    60, 20,
+                    color, score
+                ));
+            }
+        }
+        InitBrickGrid();
+        return false;
+    }
+}
+
+bool Game::LoadSaveGame() {
+    std::ifstream file("savegame.json");
+    if (!file.is_open()) {
+        m_hasSave = false;
+        return false;
+    }
+
+    try {
+        json j;
+        file >> j;
+        m_score = j["score"];
+        m_lives = j["lives"];
+        m_currentLevel = j["level"];
+        m_hasSave = true;
+        return true;
+    } catch (...) {
+        m_hasSave = false;
+        return false;
+    }
+}
+
+void Game::SaveGame() {
+    json j = {
+        {"score", m_score},
+        {"lives", m_lives},
+        {"level", m_currentLevel}
+    };
+    std::ofstream file("savegame.json");
+    if (file.is_open()) {
+        file << j.dump(4);
+    }
+}
+
 void Game::HandleStateTransition() {
     switch (m_currentState) {
         case GameState::MENU:
-            if (IsKeyPressed(KEY_SPACE)) m_currentState = GameState::PLAYING;
+            // ✅ 菜单按键检测（1/2/3 + Enter）
+            if (IsKeyPressed(KEY_ONE)) m_menuOption = 0;
+            if (IsKeyPressed(KEY_TWO)) m_menuOption = 1;
+            if (IsKeyPressed(KEY_THREE)) m_menuOption = 2;
+
+            // 关卡选择时左右切换
+            if (m_menuOption == 2) {
+                if (IsKeyPressed(KEY_RIGHT)) m_selectedLevel++;
+                if (IsKeyPressed(KEY_LEFT)) m_selectedLevel--;
+                if (m_selectedLevel < 1) m_selectedLevel = 1;
+                if (m_selectedLevel > 3) m_selectedLevel = 3;
+            }
+
+            // 按Enter确认选择
+            if (IsKeyPressed(KEY_ENTER)) {
+                if (m_menuOption == 0) {
+                    // 1. 新游戏
+                    m_score = 0;
+                    m_lives = 3;
+                    m_currentLevel = 1;
+                    std::remove("savegame.json");
+                    LoadLevelFromJSON(m_levelFiles[0]);
+                    m_currentState = GameState::PLAYING;
+                }
+                else if (m_menuOption == 1) {
+                    // 2. 继续游戏
+                    if (LoadSaveGame()) {
+                        LoadLevelFromJSON(m_levelFiles[m_currentLevel - 1]);
+                        m_currentState = GameState::PLAYING;
+                    }
+                }
+                else if (m_menuOption == 2) {
+                    // 3. 选择关卡
+                    m_currentLevel = m_selectedLevel;
+                    m_score = 0;
+                    m_lives = 3;
+                    LoadLevelFromJSON(m_levelFiles[m_currentLevel - 1]);
+                    m_currentState = GameState::PLAYING;
+                }
+            }
             if (IsKeyPressed(KEY_L)) m_currentState = GameState::LEADERBOARD;
             break;
         case GameState::PLAYING:
@@ -180,7 +361,12 @@ void Game::SpawnBrickParticles(Vector2 pos, Color color)
 
 void Game::Update() {
     if (m_currentState != GameState::PLAYING) return;
-
+    //✅ 游戏中按E退出（保留在这里）
+    if (IsKeyPressed(KEY_E)) {
+        SaveGame();
+        m_currentState = GameState::MENU;
+        return;
+    }
     float dt = GetFrameTime();
 
     // 更新小球和挡板
@@ -420,102 +606,155 @@ for (int i = 0; i < MAX_PARTICLES; i++) {
             m_currentState = GameState::GAMEOVER;
         }
     }
+
+     // 检测当前关卡是否通关（所有砖块死亡）
+    bool allBricksCleared = true;
+for (auto& brick : m_bricks)
+{
+    if (brick.alive)
+    {
+        allBricksCleared = false;
+        break;
+    }
+}
+
+if (allBricksCleared)
+{
+    m_currentLevel++;
+
+    if ((size_t)m_currentLevel > m_levelFiles.size())
+    {
+        TraceLog(LOG_INFO, "恭喜！全部关卡通关！");
+        Close();
+        return;
+    }
+
+    LoadLevelFromJSON(m_levelFiles[m_currentLevel - 1]);
+
+    m_ball->pos = { m_screenWidth / 2.0f, m_screenHeight - 50.0f };
+    m_ball->vel = { 0, -300 };
+    m_extraBalls.clear();
+}
 }
 
 void Game::Draw() {
     BeginDrawing();
     ClearBackground(RAYWHITE);
     
-    //检测帧率
-    DrawText(TextFormat("FPS: %.1f", 1.0f / GetFrameTime()), 10, 30, 20, BLUE);
+    // 帧率显示（固定位置，不遮挡）
+    DrawText(TextFormat("FPS: %.1f", 1.0f / GetFrameTime()), 10, 10, 20, BLUE);
 
     switch (m_currentState) {
         case GameState::MENU: {
+            // 标题
             const char* t = "BRICK BREAKER";
             int w = MeasureText(t, 40);
-            DrawText(t, (m_screenWidth-w)/2, m_screenHeight/2-80, 40, BLUE);
-            const char* s = "Press SPACE to Start";
-            w = MeasureText(s,30);
-            DrawText(s,(m_screenWidth-w)/2,m_screenHeight/2,30,GRAY);
-            const char* l = "Press L for Leaderboard";
-            w = MeasureText(l,20);
-            DrawText(l,(m_screenWidth-w)/2,m_screenHeight/2+50,20,GRAY);
-            break;
-        }
-        case GameState::PLAYING: {
-            /*// 绘制粒子
-            for (auto& p : m_particles) {
-                float alpha = p.life / p.maxLife;
-                DrawCircleV(p.pos, 3, ColorAlpha(p.color, alpha));
+            DrawText(t, (m_screenWidth-w)/2, 120, 40, BLUE);
+
+            // 菜单选项（干净不重叠）
+            const char* options[] = {
+                "1. New Game",
+                "2. Continue",
+                "3. Select Level"
+            };
+            for (int i = 0; i < 3; i++) {
+                int textY = 220 + i * 45;
+                DrawText(options[i],
+                    (m_screenWidth - MeasureText(options[i], 25))/2,
+                    textY,
+                    25,
+                    (m_menuOption == i) ? GREEN : DARKGRAY);
             }
 
-            DrawCircleV(m_ball->pos, m_ball->radius, RED);
-            DrawRectangleRec(m_paddle->GetRect(), BLUE);
-            for (auto& b : m_bricks) if (b.alive) DrawRectangleRec(b.rect, b.color);*/
+            // 选择关卡提示
+            if (m_menuOption == 2) {
+                char levelText[32];
+                sprintf(levelText, "Level: %d (<-/-> to change)", m_selectedLevel);
+                DrawText(levelText,
+                    (m_screenWidth - MeasureText(levelText, 20))/2,
+                    380,
+                    20,
+                    GRAY);
+            }
 
-            // 绘制粒子（对象池优化版，和你原来效果完全一样）
+            // 操作提示
+            DrawText("USE 1/2/3 + ENTER to confirm",
+                (m_screenWidth - MeasureText("USE 1/2/3 + ENTER to confirm", 20))/2,
+                450,
+                20,
+                GRAY);
+            DrawText("Press L for Leaderboard",
+                (m_screenWidth - MeasureText("Press L for Leaderboard", 20))/2,
+                500,
+                20,
+                GRAY);
+            break;
+        }
+
+        case GameState::PLAYING: {
+            // 粒子
             for (int i = 0; i < MAX_PARTICLES; i++) {
                 if (!m_particlePool[i].active) continue;
-
                 float alpha = m_particlePool[i].life / m_particlePool[i].maxLife;
-             DrawCircleV(m_particlePool[i].pos, 3, ColorAlpha(m_particlePool[i].color, alpha));
+                DrawCircleV(m_particlePool[i].pos, 3, ColorAlpha(m_particlePool[i].color, alpha));
             }
 
+            // 游戏物体
             DrawCircleV(m_ball->pos, m_ball->radius, RED);
             DrawRectangleRec(m_paddle->GetRect(), BLUE);
-            for (auto& b : m_bricks) if (b.alive) DrawRectangleRec(b.rect, b.color);
+            // 修改后（增加白色边框）
+            for (auto& b : m_bricks) {
+                if (b.alive) {
+                    DrawRectangleRec(b.rect, b.color); // 绘制砖块主体
+                    // 绘制1像素白色边框（向内缩1像素避免覆盖）
+                    DrawRectangleLinesEx(b.rect, 1, WHITE);
+                }
+            }
+            for (auto& ball : m_extraBalls) if (ball.alive) DrawCircleV(ball.pos, ball.radius, RED);
+            for (auto& pu : m_powerUps) pu->Draw();
 
-            // 绘制额外球
-            for (auto& ball : m_extraBalls) {
-                if (ball.alive) DrawCircleV(ball.pos, ball.radius, RED);
-            }
+            // ========== 左侧 UI（完全不重叠） ==========
+            DrawText("Press P = Pause", 10, 40, 20, DARKGRAY);
+            DrawText("Press E = Save & Exit", 10, 70, 20, DARKGRAY);
+            DrawText(TextFormat("Level: %d", m_currentLevel), 10, 100, 20, BLUE);
 
-            // 绘制道具
-            for (auto& pu : m_powerUps) {
-                pu->Draw();
-            }
+            // 道具状态
+            if (m_paddleExtendTimer > 0)
+                DrawText(TextFormat("Paddle+: %.1fs", m_paddleExtendTimer), 10, 130, 20, BLUE);
+            if (m_ballSlowTimer > 0)
+                DrawText(TextFormat("Slow: %.1fs", m_ballSlowTimer), 10, 160, 20, YELLOW);
+            if (!m_extraBalls.empty())
+                DrawText("Multi Ball Active", 10, 190, 20, GREEN);
 
-            // UI
-            DrawText("Press P to Pause",10,10,20,GRAY);
-            DrawText(TextFormat("Lives: %d",m_lives),m_screenWidth-100,10,20,RED);
-            DrawText(TextFormat("Score: %d",m_score),m_screenWidth-100,40,20,GOLD);
-
-            // 道具状态显示
-            if (m_paddleExtendTimer > 0) {
-                DrawText(TextFormat("PADDLE+: %.1fs", m_paddleExtendTimer), 10, 40, 20, BLUE);
-            }
-            if (m_ballSlowTimer > 0) {
-                DrawText(TextFormat("SLOW: %.1fs", m_ballSlowTimer), 10, 70, 20, YELLOW);
-            }
-            if (!m_extraBalls.empty()) {
-                DrawText("MULTI BALL ACTIVE", 10, 100, 20, GREEN);
-            }
+            // ========== 右侧 UI ==========
+            DrawText(TextFormat("Lives: %d", m_lives), m_screenWidth - 120, 10, 20, RED);
+            DrawText(TextFormat("Score: %d", m_score), m_screenWidth - 120, 40, 20, YELLOW);
             break;
         }
+
         case GameState::PAUSED: {
-            const char* t = "PAUSED";
-            int w = MeasureText(t,40);
-            DrawText(t,(m_screenWidth-w)/2,m_screenHeight/2,40,ORANGE);
-            const char* s = "Press P to Resume";
-            w = MeasureText(s,20);
-            DrawText(s,(m_screenWidth-w)/2,m_screenHeight/2+50,20,GRAY);
+            DrawText("PAUSED", (m_screenWidth-MeasureText("PAUSED",40))/2, 200, 40, ORANGE);
+            DrawText("Press P to Resume", (m_screenWidth-MeasureText("Press P to Resume",20))/2, 270, 20, GRAY);
             break;
         }
+
         case GameState::GAMEOVER:
-            DrawText("GAME OVER",m_screenWidth/2-80,m_screenHeight/2-40,40,RED);
-            DrawText(TextFormat("Final Score: %d",m_score),m_screenWidth/2-100,m_screenHeight/2+20,30,GRAY);
-            DrawText("Press SPACE to Menu",m_screenWidth/2-140,m_screenHeight/2+70,20,GRAY);
+            DrawText("GAME OVER", (m_screenWidth-MeasureText("GAME OVER",40))/2, 200, 40, RED);
+            DrawText(TextFormat("Score: %d", m_score), (m_screenWidth-MeasureText(TextFormat("Score: %d", m_score),30))/2, 270, 30, DARKGRAY);
+            DrawText("Press SPACE to Menu", (m_screenWidth-MeasureText("Press SPACE to Menu",20))/2, 330, 20, GRAY);
             break;
+
         case GameState::VICTORY:
-            DrawText("VICTORY!",m_screenWidth/2-80,m_screenHeight/2-40,40,GREEN);
-            DrawText(TextFormat("Final Score: %d",m_score),m_screenWidth/2-100,m_screenHeight/2+20,30,GRAY);
-            DrawText("Press SPACE to Menu",m_screenWidth/2-140,m_screenHeight/2+70,20,GRAY);
+            DrawText("VICTORY!", (m_screenWidth-MeasureText("VICTORY!",40))/2, 200, 40, GREEN);
+            DrawText(TextFormat("Score: %d", m_score), (m_screenWidth-MeasureText(TextFormat("Score: %d", m_score),30))/2, 270, 30, DARKGRAY);
+            DrawText("Press SPACE to Menu", (m_screenWidth-MeasureText("Press SPACE to Menu",20))/2, 330, 20, GRAY);
             break;
+
         case GameState::LEADERBOARD:
-            DrawText("LEADERBOARD",m_screenWidth/2-100,m_screenHeight/2-80,40,BLUE);
-            DrawText("1. Player A: 1000",m_screenWidth/2-100,m_screenHeight/2,30,GRAY);
-            DrawText("2. Player B: 800",m_screenWidth/2-100,m_screenHeight/2+40,30,GRAY);
-            DrawText("Press L to Return",m_screenWidth/2-100,m_screenHeight/2+100,20,GRAY);
+            DrawText("LEADERBOARD", (m_screenWidth-MeasureText("LEADERBOARD",40))/2, 120, 40, BLUE);
+            DrawText("1. Player: 1000", (m_screenWidth-MeasureText("1. Player: 1000",30))/2, 220, 30, DARKGRAY);
+            DrawText("2. Player: 800", (m_screenWidth-MeasureText("2. Player: 800",30))/2, 260, 30, DARKGRAY);
+            DrawText("Press L to Return", (m_screenWidth-MeasureText("Press L to Return",20))/2, 350, 20, GRAY);
             break;
     }
     EndDrawing();
@@ -614,4 +853,10 @@ void Game::InitBrickGrid() {
 
         m_brickGrid[col][row].push_back(&brick);
     }
+}
+
+void Game::Close()
+{
+    // 退出时自动保存游戏进度
+    SaveGame();
 }

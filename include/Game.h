@@ -1,6 +1,8 @@
 #ifndef GAME_H
 #define GAME_H
 
+#include "json.hpp"
+using json = nlohmann::json;
 #include "raylib.h"
 #include "Ball.h"
 #include "Paddle.h"
@@ -46,6 +48,7 @@ public:
     int GetScreenHeight();
     // 网格初始化
     void InitBrickGrid();
+    void Close();
 
 private:
     void LoadConfig();
@@ -102,6 +105,27 @@ private:
 
     static const int MAX_PARTICLES = 300;  // 最多同时300个粒子
     PoolParticle m_particlePool[MAX_PARTICLES]; // 对象池（预分配）
+
+
+    // 关卡相关
+    int m_currentLevel = 1;
+    std::vector<std::string> m_levelFiles = {
+        "levels/level1.json",
+        "levels/level2.json",
+        "levels/level3.json"
+    };
+
+    // 存档相关
+    bool m_hasSave = false;
+
+    // 必须的函数声明
+    bool LoadLevelFromJSON(const std::string& filename);
+    bool LoadSaveGame();
+    void SaveGame();
+
+    // 菜单选择相关
+    int m_menuOption = 0;  // 0:新游戏 1:继续游戏 2:选择关卡
+    int m_selectedLevel = 1;
 };
 
 #endif
