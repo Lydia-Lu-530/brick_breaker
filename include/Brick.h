@@ -9,14 +9,15 @@ struct Brick {
     Rectangle rect;   // 碰撞矩形
     bool alive;       // 是否存活
     Color color;      // 颜色
-    int score;        // 新增：击碎该砖块的得分
+    int score;        // 击碎该砖块的得分
 
 
-    Brick(float x, float y, float width, float height, Color color, int score);
+    Brick(float x, float y, float width, float height, Color color, int score);//初始化砖块信息
 };
 
-// 正确写法：Ball& 后面加空格，参数名 ball
+// 创建砖块
 std::vector<Brick> CreateBricks(int screenWidth);
+// 碰撞测试
 bool CheckBallBrickCollision(Ball& ball, std::vector<Brick>& bricks, int& score);
 
 #endif // BRICK_H

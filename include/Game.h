@@ -22,7 +22,7 @@ struct Particle {
     float life;
     float maxLife;
 };
-
+// 状态机
 enum class GameState {
     MENU,
     PLAYING,
@@ -51,16 +51,16 @@ public:
     void Close();
 
 private:
-    void LoadConfig();
-    void Init();
-    void HandleStateTransition();
-    void Update();
-    void Draw();
-    bool CheckAllBricksDestroyed();
-    void Reset();
+    void LoadConfig();// 加载游戏配置文件（如config.json
+    void Init();// 游戏初始化：创建球、挡板、初始化变量、加载第一关
+    void HandleStateTransition();// 处理游戏状态切换（菜单→游戏→暂停→胜利→失败）
+    void Update();// 游戏逻辑更新：物理运动、碰撞检测、道具、粒子、倒计时
+    void Draw();// 游戏画面绘制：渲染所有物体、UI、菜单、文字
+    bool CheckAllBricksDestroyed();// 检查所有砖块是否被销毁（用于判断是否通关）
+    void Reset();// 重置游戏：分数、生命、关卡、道具状态全部恢复默认
     void SpawnBrickParticles(Vector2 pos, Color color); // 粒子生成函数声明
 
-    nlohmann::json config;
+    nlohmann::json config;//创建一个空的 JSON 对象，用来存放、读取、写入游戏的配置 / 数据
     nlohmann::json powerUpConfig; // 道具JSON配置
 
     int m_screenWidth;

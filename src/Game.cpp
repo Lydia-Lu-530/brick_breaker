@@ -318,24 +318,6 @@ void Game::HandleStateTransition() {
     }
 }
 
-// 生成砖块破碎粒子
-/*void Game::SpawnBrickParticles(Vector2 pos, Color color) {
-    std::uniform_real_distribution<float> angleDist(0, 2 * PI);
-    std::uniform_real_distribution<float> speedDist(50, 150);
-    std::uniform_real_distribution<float> lifeDist(0.5f, 1.0f);
-
-    for (int i = 0; i < 8; i++) {
-        float angle = angleDist(m_rng);
-        float speed = speedDist(m_rng);
-        Particle p;
-        p.pos = pos;
-        p.vel = {cosf(angle) * speed, sinf(angle) * speed};
-        p.color = color;
-        p.life = lifeDist(m_rng);
-        p.maxLife = p.life;
-        m_particles.push_back(p);
-    }
-}*/
 //对象池版SpawnBrickParticles 
 void Game::SpawnBrickParticles(Vector2 pos, Color color)
 {
@@ -389,21 +371,7 @@ void Game::Update() {
         m_ball->vel.x = (m_ball->pos.x - m_paddle->pos.x) * 0.1f;
     }
 
-    // 球与砖块碰撞（加分 + 粒子特效）初版
-    /*
-    for (auto& brick : m_bricks) {
-        if (!brick.alive) continue;
-        if (CheckCollisionCircleRec(m_ball->pos, m_ball->radius, brick.rect)) {
-            // 小球反弹
-            if (m_ball->vel.y < 0) m_ball->vel.y *= -1;
-            brick.alive = false;
-            m_score += brick.score;
-            // 生成砖块破碎粒子
-            SpawnBrickParticles({brick.rect.x + brick.rect.width/2, brick.rect.y + brick.rect.height/2}, brick.color);
-        }
-    }
-    */
-    // ======================
+// ======================
 // 优化版：网格碰撞检测
 // ======================
 int ballCol = m_ball->pos.x / (m_screenWidth / GRID_COLS);
@@ -476,28 +444,6 @@ for (int dc = -1; dc <= 1; ++dc) {
         }
     }
 
-    // ====================== 更新额外球 ======================
-    /*
-    for (auto& ball : m_extraBalls) {
-        ball.Update();
-        ball.CheckBoundaryCollision(m_screenWidth, m_screenHeight);
-        if (CheckCollisionCircleRec(ball.pos, ball.radius, m_paddle->GetRect()) && ball.vel.y > 0) {
-            ball.vel.y *= -1;
-            ball.vel.x = (ball.pos.x - m_paddle->pos.x) * 0.1f;
-        }
-        // 额外球与砖块碰撞
-        for (auto& brick : m_bricks) {
-            if (!brick.alive) continue;
-            if (CheckCollisionCircleRec(ball.pos, ball.radius, brick.rect)) {
-                if (ball.vel.y < 0) ball.vel.y *= -1;
-                brick.alive = false;
-                m_score += brick.score;
-                SpawnBrickParticles({brick.rect.x + brick.rect.width/2, brick.rect.y + brick.rect.height/2}, brick.color);
-            }
-        }
-        if (ball.pos.y + ball.radius >= m_screenHeight) ball.alive = false;
-    }
-    */
 // 额外球优化碰撞
 for (auto& ball : m_extraBalls) {
     if (!ball.alive) continue;
@@ -556,20 +502,7 @@ m_extraBalls.erase(
     ),
     m_extraBalls.end()
 );
-/*
-    // ====================== 更新粒子 ======================
-    for (auto it = m_particles.begin(); it != m_particles.end();) {
-        it->pos.x += it->vel.x * dt;
-        it->pos.y += it->vel.y * dt;
-        it->vel.y += 200 * dt; // 重力
-        it->life -= dt;
-        if (it->life <= 0) {
-            it = m_particles.erase(it);
-        } else {
-            ++it;
-        }
-    }
-*/  
+  
     // ====================== 【对象池优化版】更新粒子 ======================
 for (int i = 0; i < MAX_PARTICLES; i++) {
     if (!m_particlePool[i].active) continue;
@@ -643,8 +576,9 @@ void Game::Draw() {
     
     // 帧率显示（固定位置，不遮挡）
     DrawText(TextFormat("FPS: %.1f", 1.0f / GetFrameTime()), 10, 10, 20, BLUE);
-
+    //状态切换
     switch (m_currentState) {
+        //菜单
         case GameState::MENU: {
             // 标题
             const char* t = "BRICK BREAKER";
@@ -690,7 +624,7 @@ void Game::Draw() {
                 GRAY);
             break;
         }
-
+        //游戏中
         case GameState::PLAYING: {
             // 粒子
             for (int i = 0; i < MAX_PARTICLES; i++) {
@@ -713,7 +647,7 @@ void Game::Draw() {
             for (auto& ball : m_extraBalls) if (ball.alive) DrawCircleV(ball.pos, ball.radius, RED);
             for (auto& pu : m_powerUps) pu->Draw();
 
-            // ========== 左侧 UI（完全不重叠） ==========
+            // ========== 左侧 UI ==========
             DrawText("Press P = Pause", 10, 40, 20, DARKGRAY);
             DrawText("Press E = Save & Exit", 10, 70, 20, DARKGRAY);
             DrawText(TextFormat("Level: %d", m_currentLevel), 10, 100, 20, BLUE);
@@ -731,25 +665,25 @@ void Game::Draw() {
             DrawText(TextFormat("Score: %d", m_score), m_screenWidth - 120, 40, 20, YELLOW);
             break;
         }
-
+        //暂停
         case GameState::PAUSED: {
             DrawText("PAUSED", (m_screenWidth-MeasureText("PAUSED",40))/2, 200, 40, ORANGE);
             DrawText("Press P to Resume", (m_screenWidth-MeasureText("Press P to Resume",20))/2, 270, 20, GRAY);
             break;
         }
-
+        //游戏结束
         case GameState::GAMEOVER:
             DrawText("GAME OVER", (m_screenWidth-MeasureText("GAME OVER",40))/2, 200, 40, RED);
             DrawText(TextFormat("Score: %d", m_score), (m_screenWidth-MeasureText(TextFormat("Score: %d", m_score),30))/2, 270, 30, DARKGRAY);
             DrawText("Press SPACE to Menu", (m_screenWidth-MeasureText("Press SPACE to Menu",20))/2, 330, 20, GRAY);
             break;
-
+        //成功通关
         case GameState::VICTORY:
             DrawText("VICTORY!", (m_screenWidth-MeasureText("VICTORY!",40))/2, 200, 40, GREEN);
             DrawText(TextFormat("Score: %d", m_score), (m_screenWidth-MeasureText(TextFormat("Score: %d", m_score),30))/2, 270, 30, DARKGRAY);
             DrawText("Press SPACE to Menu", (m_screenWidth-MeasureText("Press SPACE to Menu",20))/2, 330, 20, GRAY);
             break;
-
+        //排行榜
         case GameState::LEADERBOARD:
             DrawText("LEADERBOARD", (m_screenWidth-MeasureText("LEADERBOARD",40))/2, 120, 40, BLUE);
             DrawText("1. Player: 1000", (m_screenWidth-MeasureText("1. Player: 1000",30))/2, 220, 30, DARKGRAY);
@@ -759,80 +693,102 @@ void Game::Draw() {
     }
     EndDrawing();
 }
-
+// 检查所有砖块是否被销毁（用于判断是否通关）
 bool Game::CheckAllBricksDestroyed() {
     for (auto& b : m_bricks) if (b.alive) return false;
     return true;
 }
-
+// 重置游戏：分数、生命、关卡、道具状态全部恢复默认
 void Game::Reset() {
-    m_lives = config["game"]["initial_lives"];
-    m_score = 0;
-    m_bricks.clear();
-    m_powerUps.clear();
-    m_extraBalls.clear();
-    m_particles.clear();
-    m_paddleExtendTimer = 0;
-    m_ballSlowTimer = 0;
-
-    float bw = config["brick"]["width"];
-    float bh = config["brick"]["height"];
-    float sp = config["brick"]["spacing"];
-    int cnt = config["brick"]["count"];
-    int sc = config["game"]["score_gold"];
-
+    m_lives = config["game"]["initial_lives"];// 从配置文件读取初始生命值并恢复
+    m_score = 0;// 分数清零
+    // 清空所有游戏对象容器
+    m_bricks.clear();// 清空砖块
+    m_powerUps.clear();// 清空道具
+    m_extraBalls.clear();// 清空额外球
+    m_particles.clear();// 清空粒子特效
+    // 重置所有道具计时器（关闭所有道具效果）
+    m_paddleExtendTimer = 0;// 挡板延长效果归零
+    m_ballSlowTimer = 0;// 球减速效果归零
+    // 从JSON配置读取砖块参数
+    float bw = config["brick"]["width"];// 砖块宽度
+    float bh = config["brick"]["height"];// 砖块高度
+    float sp = config["brick"]["spacing"];// 砖块间距
+    int cnt = config["brick"]["count"];// 砖块数量
+    int sc = config["game"]["score_gold"];// 金色砖块分数
+    // 创建一排金色初始砖块
     for (int i=0;i<cnt;++i) {
         m_bricks.emplace_back(60+i*(bw+sp),60,bw,bh,GOLD,sc);
     }
 
-    m_ball->Reset(m_screenWidth,m_screenHeight);
-    ResetPaddleSize();
-    ResetBallSpeed();
+    m_ball->Reset(m_screenWidth,m_screenHeight);// 重置球的位置与状态
+    ResetPaddleSize();// 重置挡板尺寸
+    ResetBallSpeed();// 重置球的移动速度
 
-    InitBrickGrid(); 
+    InitBrickGrid();// 初始化砖块网格（用于碰撞检测优化）
 }
 
-// 道具效果实现
+//  ==================== 道具效果实现 ====================
+// 功能：延长挡板长度
+// 参数：scale-缩放比例  duration-效果持续时间
 void Game::ExtendPaddle(float scale, float duration) {
+    // 设置挡板宽度为原始宽度的scale倍
     m_paddle->SetWidth(m_paddleOriginalWidth * scale);
+    // 设置道具效果计时器
     m_paddleExtendTimer = duration;
 }
 
+// 功能：重置挡板为默认大小（道具效果结束时调用）
 void Game::ResetPaddleSize() {
     m_paddle->SetWidth(m_paddleOriginalWidth);
 }
 
+// 功能：生成额外的球（多球道具）
 void Game::SpawnMultiBall() {
+    // 确保场上只有一个额外球，避免无限生成
     if (m_extraBalls.empty()) {
+        // 复制当前主球的状态
         Ball newBall = *m_ball;
+        // 反向X轴速度，让新球朝另一边飞
         newBall.vel.x *= -1;
+        // 将新球加入额外球列表
         m_extraBalls.push_back(newBall);
     }
 }
 
+// 功能：减慢所有球的速度（减速道具）
+// 参数：scale-速度缩放比例（小于1减速） duration-持续时间
 void Game::SlowBall(float scale, float duration) {
+    // 减慢主球速度
     m_ball->vel.x *= scale;
     m_ball->vel.y *= scale;
+    // 遍历并减慢所有额外球的速度
     for (auto& ball : m_extraBalls) {
         ball.vel.x *= scale;
         ball.vel.y *= scale;
     }
+    // 设置减速效果计时器
     m_ballSlowTimer = duration;
 }
 
+// 功能：重置所有球为原始速度（道具效果结束）
 void Game::ResetBallSpeed() {
+    // 恢复主球速度
     m_ball->vel.x = m_ballOriginalSpeedX;
     m_ball->vel.y = m_ballOriginalSpeedY;
+    // 恢复所有额外球速度
     for (auto& ball : m_extraBalls) {
         ball.vel.x = m_ballOriginalSpeedX;
         ball.vel.y = m_ballOriginalSpeedY;
     }
 }
 
+// 功能：获取挡板的矩形区域（供外部碰撞检测使用）
 Rectangle Game::GetPaddleRect() {
     return m_paddle->GetRect();
 }
 
+// 功能：获取屏幕高度（工具函数）
 int Game::GetScreenHeight() {
     return m_screenHeight;
 }
