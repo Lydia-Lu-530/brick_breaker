@@ -126,6 +126,10 @@ private:
     // 菜单选择相关
     int m_menuOption = 0;  // 0:新游戏 1:继续游戏 2:选择关卡
     int m_selectedLevel = 1;
+
+    bool m_ballAttached;   // 球是否粘在挡板上
+
+    std::vector<bool> m_savedBrickStates;
 };
 
 #endif

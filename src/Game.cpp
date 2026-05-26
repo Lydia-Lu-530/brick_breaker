@@ -123,6 +123,8 @@ void Game::Init() {
     }
 
     InitBrickGrid();
+
+    m_ballAttached = true;   // 一开始球粘在板子上
 }
 
 void Game::Run() {
@@ -155,6 +157,15 @@ bool Game::LoadLevelFromJSON(const std::string& filename) {
             }
         }
         InitBrickGrid();
+
+        // 恢复砖块状态
+        if (!m_savedBrickStates.empty() && m_savedBrickStates.size() == m_bricks.size()) {
+            for (int i = 0; i < m_bricks.size(); i++) {
+                m_bricks[i].alive = m_savedBrickStates[i];
+            }
+            m_savedBrickStates.clear();
+        }
+
         return false;
     }
 
@@ -196,6 +207,17 @@ bool Game::LoadLevelFromJSON(const std::string& filename) {
             }
         }
         InitBrickGrid();
+
+        // ==============================
+        // 【已加好】恢复砖块的存活状态
+        // ==============================
+        if (!m_savedBrickStates.empty() && m_savedBrickStates.size() == m_bricks.size()) {
+            for (int i = 0; i < m_bricks.size(); i++) {
+                m_bricks[i].alive = m_savedBrickStates[i];
+            }
+            m_savedBrickStates.clear();
+        }
+
         return true;
     } catch (const std::exception& e) {
         TraceLog(LOG_ERROR, "JSON解析错误：%s，使用默认布局", e.what());
@@ -215,10 +237,19 @@ bool Game::LoadLevelFromJSON(const std::string& filename) {
             }
         }
         InitBrickGrid();
+
+        // 恢复砖块状态
+        if (!m_savedBrickStates.empty() && m_savedBrickStates.size() == m_bricks.size()) {
+            for (int i = 0; i < m_bricks.size(); i++) {
+                m_bricks[i].alive = m_savedBrickStates[i];
+            }
+            m_savedBrickStates.clear();
+        }
+
         return false;
     }
 }
-
+//读档
 bool Game::LoadSaveGame() {
     std::ifstream file("savegame.json");
     if (!file.is_open()) {
@@ -229,10 +260,18 @@ bool Game::LoadSaveGame() {
     try {
         json j;
         file >> j;
+        file.close();
+
         m_score = j["score"];
         m_lives = j["lives"];
         m_currentLevel = j["level"];
         m_hasSave = true;
+
+        // 👇 新增：把砖块状态也读到成员变量里
+        if (j.contains("bricks")) {
+            m_savedBrickStates = j["bricks"].get<std::vector<bool>>();
+        }
+
         return true;
     } catch (...) {
         m_hasSave = false;
@@ -240,15 +279,24 @@ bool Game::LoadSaveGame() {
     }
 }
 
+//存档
 void Game::SaveGame() {
-    json j = {
-        {"score", m_score},
-        {"lives", m_lives},
-        {"level", m_currentLevel}
-    };
+    json j;
+    j["score"] = m_score;
+    j["lives"] = m_lives;
+    j["level"] = m_currentLevel;
+
+    // 👇 新增：保存所有砖块的存活状态
+    std::vector<bool> brickStates;
+    for (auto& brick : m_bricks) {
+        brickStates.push_back(brick.alive);
+    }
+    j["bricks"] = brickStates;
+
     std::ofstream file("savegame.json");
     if (file.is_open()) {
         file << j.dump(4);
+        file.close();
     }
 }
 
@@ -277,6 +325,9 @@ void Game::HandleStateTransition() {
                     m_currentLevel = 1;
                     std::remove("savegame.json");
                     LoadLevelFromJSON(m_levelFiles[0]);
+                    // 👇 强制重置 + 粘板
+                    m_ball->Reset(m_screenWidth, m_screenHeight);
+                    m_ballAttached = true;
                     m_currentState = GameState::PLAYING;
                 }
                 else if (m_menuOption == 1) {
@@ -292,6 +343,9 @@ void Game::HandleStateTransition() {
                     m_score = 0;
                     m_lives = 3;
                     LoadLevelFromJSON(m_levelFiles[m_currentLevel - 1]);
+                    // 👇 强制重置球 + 粘在板子上
+                    m_ball->Reset(m_screenWidth, m_screenHeight);
+                    m_ballAttached = true;
                     m_currentState = GameState::PLAYING;
                 }
             }
@@ -351,18 +405,32 @@ void Game::Update() {
     }
     float dt = GetFrameTime();
 
-    // 更新小球和挡板
-    m_ball->Update();
+    // 更新挡板
     m_paddle->Update(m_screenWidth, dt);
-    m_ball->CheckBoundaryCollision(m_screenWidth, m_screenHeight);
 
-    // 小球掉落扣命
-    if (m_ball->pos.y + m_ball->radius >= m_screenHeight) {
-        m_lives--;
-        if (m_lives > 0) {
-            m_ball->Reset(m_screenWidth, m_screenHeight);
-            m_extraBalls.clear();
+    // ==========================
+    // 【粘在挡板上 + 自由移动 + 空格发射】
+    // ==========================
+    if (m_ballAttached)
+    {
+        // 球永远跟着挡板中心
+        m_ball->pos.x = m_paddle->pos.x;
+        m_ball->pos.y = m_paddle->pos.y - m_ball->radius - 5.0f;
+
+        // 按空格发射
+        if (IsKeyPressed(KEY_SPACE))
+        {
+            m_ball->vel.x = 0.0f;
+            m_ball->vel.y = -m_ballOriginalSpeedY;
+            m_ballAttached = false;
         }
+    }
+    else
+    {
+        // 正常移动
+        m_ball->Update();
+        m_ball->CheckBoundaryCollision(m_screenWidth, m_screenHeight);
+
     }
 
     // 球与挡板碰撞
@@ -488,7 +556,7 @@ for (auto& ball : m_extraBalls) {
     }
 
     // 额外球出界 → 死亡
-    if (ball.pos.y + ball.radius >= m_screenHeight || ball.pos.y - ball.radius <= 0) {
+    if (ball.pos.y + ball.radius >= m_screenHeight) {
         ball.alive = false;
     }
 }
@@ -521,53 +589,60 @@ for (int i = 0; i < MAX_PARTICLES; i++) {
     }
 }
 
-    // ====================== 多球生命值处理 ======================
-    bool allBallsDropped = (m_ball->GetPosition().y + m_ball->GetRadius() >= m_screenHeight);
+    // ====================== 多球生命值处理（修复版） ======================
+    bool mainBallDropped = (m_ball->pos.y + m_ball->radius >= m_screenHeight);
+    bool anyExtraAlive = false;
+
     for (auto& ball : m_extraBalls) {
-        if (ball.GetPosition().y + ball.GetRadius() < m_screenHeight) {
-            allBallsDropped = false;
+        if (ball.alive) {
+            anyExtraAlive = true;
             break;
         }
     }
 
-    if (allBallsDropped) {
+    // 只有【主球掉了 + 没有任何额外球活着】才扣命
+    if (mainBallDropped && !anyExtraAlive)
+    {
         m_lives--;
-        if (m_lives > 0) {
+        if (m_lives > 0)
+        {
             m_ball->Reset(m_screenWidth, m_screenHeight);
             m_extraBalls.clear();
-        } else {
+            m_ballAttached = true;   // ✅ 重新粘板
+        }
+        else
+        {
             m_currentState = GameState::GAMEOVER;
         }
     }
 
      // 检测当前关卡是否通关（所有砖块死亡）
     bool allBricksCleared = true;
-for (auto& brick : m_bricks)
-{
-    if (brick.alive)
+    for (auto& brick : m_bricks)
     {
-        allBricksCleared = false;
-        break;
-    }
-}
-
-if (allBricksCleared)
-{
-    m_currentLevel++;
-
-    if ((size_t)m_currentLevel > m_levelFiles.size())
-    {
-        TraceLog(LOG_INFO, "恭喜！全部关卡通关！");
-        Close();
-        return;
+        if (brick.alive)
+        {
+            allBricksCleared = false;
+            break;
+        }
     }
 
-    LoadLevelFromJSON(m_levelFiles[m_currentLevel - 1]);
+    if (allBricksCleared)
+    {   
+        m_currentLevel++;
 
-    m_ball->pos = { m_screenWidth / 2.0f, m_screenHeight - 50.0f };
-    m_ball->vel = { 0, -300 };
-    m_extraBalls.clear();
-}
+        if ((size_t)m_currentLevel > m_levelFiles.size())
+        {
+            TraceLog(LOG_INFO, "Congratulations！");
+            Close();
+            return;
+        }
+
+        LoadLevelFromJSON(m_levelFiles[m_currentLevel - 1]);
+
+        m_ballAttached = true;  // ✅ 通关后粘住
+        m_extraBalls.clear();
+    }
 }
 
 void Game::Draw() {
@@ -745,13 +820,17 @@ void Game::ResetPaddleSize() {
 
 // 功能：生成额外的球（多球道具）
 void Game::SpawnMultiBall() {
-    // 确保场上只有一个额外球，避免无限生成
-    if (m_extraBalls.empty()) {
-        // 复制当前主球的状态
+    // 限制：同一时间最多 1 个额外球（防止太多）
+    int aliveExtra = 0;
+    for (auto& b : m_extraBalls) {
+        if (b.alive) aliveExtra++;
+    }
+
+    // 只有【没有存活的额外球】时才生成
+    if (aliveExtra == 0) {
         Ball newBall = *m_ball;
-        // 反向X轴速度，让新球朝另一边飞
         newBall.vel.x *= -1;
-        // 将新球加入额外球列表
+        newBall.alive = true;
         m_extraBalls.push_back(newBall);
     }
 }
@@ -773,13 +852,28 @@ void Game::SlowBall(float scale, float duration) {
 
 // 功能：重置所有球为原始速度（道具效果结束）
 void Game::ResetBallSpeed() {
-    // 恢复主球速度
-    m_ball->vel.x = m_ballOriginalSpeedX;
-    m_ball->vel.y = m_ballOriginalSpeedY;
-    // 恢复所有额外球速度
+    // -------- 恢复主球速度 --------
+    float len = sqrtf(m_ball->vel.x * m_ball->vel.x + m_ball->vel.y * m_ball->vel.y);
+    if (len > 0.001f) {
+        // 算出当前方向（单位向量）
+        float dirX = m_ball->vel.x / len;
+        float dirY = m_ball->vel.y / len;
+        
+        // 保持方向，只改大小
+        m_ball->vel.x = dirX * m_ballOriginalSpeedX;
+        m_ball->vel.y = dirY * fabsf(m_ballOriginalSpeedY);
+    }
+
+    // -------- 恢复所有额外球速度（同样保持方向） --------
     for (auto& ball : m_extraBalls) {
-        ball.vel.x = m_ballOriginalSpeedX;
-        ball.vel.y = m_ballOriginalSpeedY;
+        float blen = sqrtf(ball.vel.x * ball.vel.x + ball.vel.y * ball.vel.y);
+        if (blen > 0.001f) {
+            float dirX = ball.vel.x / blen;
+            float dirY = ball.vel.y / blen;
+            
+            ball.vel.x = dirX * m_ballOriginalSpeedX;
+            ball.vel.y = dirY * fabsf(m_ballOriginalSpeedY);
+        }
     }
 }
 
