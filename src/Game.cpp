@@ -356,6 +356,16 @@ void Game::HandleStateTransition() {
                     m_currentLevel = 1;
                     std::remove("savegame.json");
                     LoadLevelFromJSON(m_levelFiles[0]);
+                    // ✅ 彻底清空所有上一局残留（关键修复）
+                    m_extraBalls.clear();    // 额外球
+                    m_powerUps.clear();     // 道具
+                    m_particles.clear();    // 粒子
+                    for (int i = 0; i < MAX_PARTICLES; i++) {
+                        m_particlePool[i].active = false; // 粒子对象池全部重置
+                    }
+                    m_paddleExtendTimer = 0; // 清除挡板延长效果
+                    m_ballSlowTimer = 0;     // 清除减速效果
+                    scorePopups.clear(); // ✅ 新游戏时清空飘字
                     // 👇 强制重置 + 粘板
                     m_ball->Reset(m_screenWidth, m_screenHeight);
                     m_ballAttached = true;
@@ -374,6 +384,16 @@ void Game::HandleStateTransition() {
                     m_score = 0;
                     m_lives = 3;
                     LoadLevelFromJSON(m_levelFiles[m_currentLevel - 1]);
+                    // ✅ 彻底清空所有上一局残留（关键修复）
+                    m_extraBalls.clear();    // 额外球
+                    m_powerUps.clear();     // 道具
+                    m_particles.clear();    // 粒子
+                    for (int i = 0; i < MAX_PARTICLES; i++) {
+                        m_particlePool[i].active = false; // 粒子对象池全部重置
+                    }
+                    m_paddleExtendTimer = 0; // 清除挡板延长效果
+                    m_ballSlowTimer = 0;     // 清除减速效果
+                    scorePopups.clear(); // ✅ 新游戏时清空飘字
                     // 👇 强制重置球 + 粘在板子上
                     m_ball->Reset(m_screenWidth, m_screenHeight);
                     m_ballAttached = true;
@@ -453,6 +473,17 @@ void Game::Update() {
     //✅ 游戏中按E退出（保留在这里）
     if (IsKeyPressed(KEY_E)) {
         SaveGame();
+
+        // ✅ 退出时清空所有东西
+        m_extraBalls.clear();
+        m_powerUps.clear();
+        m_particles.clear();
+        scorePopups.clear(); // ✅ 新游戏时清空飘字
+        for (int i = 0; i < MAX_PARTICLES; i++) {
+            m_particlePool[i].active = false;
+        }
+        m_paddleExtendTimer = 0;
+        m_ballSlowTimer = 0;
         m_currentState = GameState::MENU;
         return;
     }
@@ -730,6 +761,7 @@ for (int i = 0; i < MAX_PARTICLES; i++) {
 
         m_ballAttached = true;  // ✅ 通关后粘住
         m_extraBalls.clear();
+        scorePopups.clear(); // ✅ 关键：清空所有残留的分数飘字
     }
     // ---- 新增：更新屏幕震动 ----
     UpdateScreenShake();
@@ -911,7 +943,7 @@ void Game::Draw() {
     {
         char buf[16];
         snprintf(buf, sizeof(buf), "+%d", pop.value);
-        DrawText(buf, pop.pos.x, pop.pos.y, 20, Fade(YELLOW, pop.alpha));
+        DrawText(buf, pop.pos.x, pop.pos.y, 20, Fade(SKYBLUE, pop.alpha));
     }
 
     EndDrawing();
