@@ -25,6 +25,7 @@ struct Particle {
 // 状态机
 enum class GameState {
     MENU,
+    INSTRUCTIONS, // 新增：操作说明弹窗
     PLAYING,
     PAUSED,
     GAMEOVER,
@@ -48,7 +49,7 @@ public:
     int GetScreenHeight();
     // 网格初始化
     void InitBrickGrid();
-    void Close();
+    void Close();// 退出时自动保存 + 释放资源
 
 private:
     void LoadConfig();// 加载游戏配置文件（如config.json
@@ -59,6 +60,7 @@ private:
     bool CheckAllBricksDestroyed();// 检查所有砖块是否被销毁（用于判断是否通关）
     void Reset();// 重置游戏：分数、生命、关卡、道具状态全部恢复默认
     void SpawnBrickParticles(Vector2 pos, Color color); // 粒子生成函数声明
+    void Unload(); // 释放音效、音频设备等资源
 
     nlohmann::json config;//创建一个空的 JSON 对象，用来存放、读取、写入游戏的配置 / 数据
     nlohmann::json powerUpConfig; // 道具JSON配置

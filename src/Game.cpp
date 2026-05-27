@@ -5,9 +5,26 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include "raymath.h"
 
 using json = nlohmann::json;
 json config;
+
+// ----------- 新增：屏幕震动 + 飘字 + 音效 -----------
+Camera2D gameCamera = {0};
+float shakeTime = 0.0f;
+float shakeMagnitude = 0.0f;
+
+struct ScorePopup {
+    Vector2 pos;
+    int value;
+    float timer;
+    float alpha;
+};
+std::vector<ScorePopup> scorePopups;
+
+Sound brickHitSound;
+// --------------------------------------------------------
 
 void Game::LoadConfig() {
     // 加载主配置
@@ -37,7 +54,7 @@ Game::Game(int screenWidth, int screenHeight, const char* title)
     , m_paddle(nullptr)
     , m_lives(3)
     , m_score(0)
-    , m_currentState(GameState::MENU)
+    , m_currentState(GameState::INSTRUCTIONS) // 改这里：启动先弹窗
     , m_rng(std::random_device{}())
     , m_paddleExtendTimer(0.0f)
     , m_ballSlowTimer(0.0f)
@@ -125,6 +142,14 @@ void Game::Init() {
     InitBrickGrid();
 
     m_ballAttached = true;   // 一开始球粘在板子上
+
+    // ---- 新增：相机、音频、震动初始化 ----
+    InitAudioDevice(); // 开启音频
+    brickHitSound = LoadSound("hit.wav"); // 音效文件放exe同目录
+    gameCamera.target = {0, 0};
+    gameCamera.offset = {0, 0};
+    gameCamera.rotation = 0.0f;
+    gameCamera.zoom = 1.0f;
 }
 
 void Game::Run() {
@@ -160,7 +185,7 @@ bool Game::LoadLevelFromJSON(const std::string& filename) {
 
         // 恢复砖块状态
         if (!m_savedBrickStates.empty() && m_savedBrickStates.size() == m_bricks.size()) {
-            for (int i = 0; i < m_bricks.size(); i++) {
+            for (size_t i = 0; i < m_bricks.size(); i++) {
                 m_bricks[i].alive = m_savedBrickStates[i];
             }
             m_savedBrickStates.clear();
@@ -212,7 +237,7 @@ bool Game::LoadLevelFromJSON(const std::string& filename) {
         // 【已加好】恢复砖块的存活状态
         // ==============================
         if (!m_savedBrickStates.empty() && m_savedBrickStates.size() == m_bricks.size()) {
-            for (int i = 0; i < m_bricks.size(); i++) {
+            for (size_t i = 0; i < m_bricks.size(); i++){
                 m_bricks[i].alive = m_savedBrickStates[i];
             }
             m_savedBrickStates.clear();
@@ -240,7 +265,7 @@ bool Game::LoadLevelFromJSON(const std::string& filename) {
 
         // 恢复砖块状态
         if (!m_savedBrickStates.empty() && m_savedBrickStates.size() == m_bricks.size()) {
-            for (int i = 0; i < m_bricks.size(); i++) {
+            for (size_t i = 0; i < m_bricks.size(); i++) {
                 m_bricks[i].alive = m_savedBrickStates[i];
             }
             m_savedBrickStates.clear();
@@ -302,6 +327,12 @@ void Game::SaveGame() {
 
 void Game::HandleStateTransition() {
     switch (m_currentState) {
+        case GameState::INSTRUCTIONS:
+            // 按任意键进入菜单
+            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
+                m_currentState = GameState::MENU;
+            }
+            break;
         case GameState::MENU:
             // ✅ 菜单按键检测（1/2/3 + Enter）
             if (IsKeyPressed(KEY_ONE)) m_menuOption = 0;
@@ -395,6 +426,28 @@ void Game::SpawnBrickParticles(Vector2 pos, Color color)
     }
 }
 
+
+void StartScreenShake(float magnitude, float duration)
+{
+    shakeMagnitude = magnitude;
+    shakeTime = duration;
+}
+
+void UpdateScreenShake()
+{
+    if (shakeTime > 0.0f)
+    {
+        gameCamera.offset.x = GetRandomValue(-shakeMagnitude, shakeMagnitude);
+        gameCamera.offset.y = GetRandomValue(-shakeMagnitude, shakeMagnitude);
+        shakeTime -= GetFrameTime();
+    }
+    else
+    {
+        gameCamera.offset = {0, 0};
+        shakeMagnitude = 0.0f;
+    }
+}
+
 void Game::Update() {
     if (m_currentState != GameState::PLAYING) return;
     //✅ 游戏中按E退出（保留在这里）
@@ -420,8 +473,15 @@ void Game::Update() {
         // 按空格发射
         if (IsKeyPressed(KEY_SPACE))
         {
-            m_ball->vel.x = 0.0f;
-            m_ball->vel.y = -m_ballOriginalSpeedY;
+            float angle = 0.0f;
+             // 改成 A / D 键控制角度，不影响挡板移动！
+            if (IsKeyDown(KEY_A)) angle = -35.0f;   // A = 向左斜射
+            if (IsKeyDown(KEY_D)) angle = 35.0f;    // D = 向右斜射
+
+            float rad = angle * DEG2RAD;
+            m_ball->vel.x = sinf(rad) * m_ballOriginalSpeedX;
+            m_ball->vel.y = -cosf(rad) * fabsf(m_ballOriginalSpeedY);
+
             m_ballAttached = false;
         }
     }
@@ -460,6 +520,18 @@ for (int dc = -1; dc <= 1; ++dc) {
                 m_ball->vel.y *= -1;
                 brick->alive = false;
                 m_score += brick->score;
+                // ---- 新增：音效 + 震动 + 飘字 ----
+                PlaySound(brickHitSound);
+                StartScreenShake(5.0f, 0.1f); // 震动幅度、时长
+
+                // 分数飘字
+                scorePopups.push_back({
+                { brick->rect.x + brick->rect.width/2, brick->rect.y },
+                brick->score,
+                0.6f,
+                1.0f
+                });
+                // ------------------------------------
                 SpawnBrickParticles({ brick->rect.x + brick->rect.width / 2, brick->rect.y + brick->rect.height / 2 }, brick->color);
                 hitBrick = true;
                 break;
@@ -546,7 +618,23 @@ for (auto& ball : m_extraBalls) {
                     ball.vel.y *= -1;
                     brick->alive = false;
                     m_score += brick->score;
-                    SpawnBrickParticles({ brick->rect.x + brick->rect.width / 2, brick->rect.y + brick->rect.height / 2 }, brick->color);
+
+                    // ✅ 额外球也加音效、震动、飘字
+                    PlaySound(brickHitSound);
+                    StartScreenShake(3.0f, 0.07f);
+
+                    scorePopups.push_back({
+                        { brick->rect.x + brick->rect.width/2, brick->rect.y },
+                        brick->score,
+                        0.6f,
+                        1.0f
+                    });
+
+                    SpawnBrickParticles({
+                    brick->rect.x + brick->rect.width / 2,
+                        brick->rect.y + brick->rect.height / 2
+                    }, brick->color);
+
                     hit = true;
                     break;
                 }
@@ -643,16 +731,66 @@ for (int i = 0; i < MAX_PARTICLES; i++) {
         m_ballAttached = true;  // ✅ 通关后粘住
         m_extraBalls.clear();
     }
+    // ---- 新增：更新屏幕震动 ----
+    UpdateScreenShake();
+    // ---- 新增：更新分数飘字 ----
+    for (size_t i = 0; i < scorePopups.size(); )
+    {
+        ScorePopup& pop = scorePopups[i];
+        pop.pos.y -= 60 * dt; // 向上飘
+        pop.alpha -= 1.0f / pop.timer * dt; // 渐变消失
+        pop.timer -= dt;
+
+        if (pop.timer <= 0.0f || pop.alpha <= 0.0f)
+        {
+            scorePopups.erase(scorePopups.begin() + i);
+        }
+        else
+        {
+            i++;
+        }
+    }
 }
 
 void Game::Draw() {
     BeginDrawing();
     ClearBackground(RAYWHITE);
+    // ---- 新增：开启相机（震动在这里生效） ----
+    BeginMode2D(gameCamera);
     
     // 帧率显示（固定位置，不遮挡）
     DrawText(TextFormat("FPS: %.1f", 1.0f / GetFrameTime()), 10, 10, 20, BLUE);
     //状态切换
     switch (m_currentState) {
+        case GameState::INSTRUCTIONS: {
+            ClearBackground(RAYWHITE);
+
+            // 半透明黑色遮罩
+            DrawRectangle(0, 0, m_screenWidth, m_screenHeight, Fade(BLACK, 0.8f));
+
+            // 白色弹窗背景
+            int boxW = 520;
+            int boxH = 360;
+            int boxX = (m_screenWidth - boxW) / 2;
+            int boxY = (m_screenHeight - boxH) / 2;
+            DrawRectangle(boxX, boxY, boxW, boxH, RAYWHITE);
+            DrawRectangleLinesEx({(float)boxX, (float)boxY, (float)boxW, (float)boxH}, 3, BLUE);
+
+            // 标题
+            DrawText("HOW TO PLAY", boxX + 140, boxY + 30, 32, BLUE);
+
+            // 操作说明（英文）
+            DrawText("A / D         - Aim ball before launch", boxX + 40, boxY + 90, 22, DARKGRAY);
+            DrawText("LEFT/RIGHT    - Move paddle", boxX + 40, boxY + 125, 22, DARKGRAY);
+            DrawText("SPACE        - Launch ball / Confirm", boxX + 40, boxY + 160, 22, DARKGRAY);
+            DrawText("P            - Pause game", boxX + 40, boxY + 195, 22, DARKGRAY);
+            DrawText("E            - Save & Exit to menu", boxX + 40, boxY + 230, 22, DARKGRAY);
+            DrawText("L            - Leaderboard", boxX + 40, boxY + 265, 22, DARKGRAY);
+
+            // 底部提示
+            DrawText("PRESS ENTER OR SPACE TO CONTINUE", boxX + 50, boxY + 310, 20, GREEN);
+            break;
+        }
         //菜单
         case GameState::MENU: {
             // 标题
@@ -766,6 +904,16 @@ void Game::Draw() {
             DrawText("Press L to Return", (m_screenWidth-MeasureText("Press L to Return",20))/2, 350, 20, GRAY);
             break;
     }
+    EndMode2D(); // 结束相机
+
+    // ---- 新增：绘制分数飘字（在UI层，不跟着震） ----
+    for (const auto& pop : scorePopups)
+    {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "+%d", pop.value);
+        DrawText(buf, pop.pos.x, pop.pos.y, 20, Fade(YELLOW, pop.alpha));
+    }
+
     EndDrawing();
 }
 // 检查所有砖块是否被销毁（用于判断是否通关）
@@ -905,8 +1053,15 @@ void Game::InitBrickGrid() {
     }
 }
 
+void Game::Unload()
+{
+    UnloadSound(brickHitSound);
+    CloseAudioDevice();
+}
+
 void Game::Close()
 {
     // 退出时自动保存游戏进度
     SaveGame();
+    Unload();  // 👈 加这一行
 }
